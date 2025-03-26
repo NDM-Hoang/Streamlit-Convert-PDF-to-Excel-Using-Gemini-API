@@ -6,6 +6,7 @@ import requests
 import re
 import tempfile
 from pathlib import Path
+from func_timeout import func_timeout, FunctionTimedOut
 
 # Cài đặt trang
 st.set_page_config(
@@ -56,29 +57,26 @@ def build_prompt(user_prompt):
             
             # YOUR CODE HERE: Extract and format all content from the source file
             
-            # Save file to buffer
+            # Save file to buffer - DO NOT CHANGE THIS LINE
             wb.save(buffer)
-            print("Successfully created Excel file in memory buffer")
-            return True
+            return buffer
         except Exception as e:
             print(f"Error: {{e}}")
-            return False
+            return None
     
-    # Execution
+    # This is how the function will be called - DO NOT CHANGE
     buffer = io.BytesIO()
-    create_excel_report(buffer)
-    buffer.seek(0)  # Reset buffer position to beginning
+    result = create_excel_report(buffer)
+    buffer.seek(0)  # Reset buffer position
     ```
     
     Requirements:
-    
     1. Extract ALL text/tables from the file
     2. Format with proper headings, alignment, borders
-    3. DO NOT change function structure
+    3. DO NOT change function structure or parameters
     4. MUST save to buffer with wb.save(buffer)
-    5. Ensure buffer has data by verifying it after save
-    6. Return buffer at the end of the function
-    7. Don't explain anything, just give code
+    5. MUST return buffer at the end of the function
+    6. Don't explain anything, just give code
     
     User instructions: {user_prompt}
     """
@@ -135,11 +133,13 @@ def extract_code(response):
         if matches:
             return matches[0].strip()
         
-        # Nếu không tìm thấy khối Python, thử tìm khối code chung
+        # Thử tìm code trong khối ``````
         generic_pattern = r'``````'
         matches = re.findall(generic_pattern, full_text, re.DOTALL)
-        if matches:
-            return matches[0].strip()
+        if matches and len(matches) > 0:
+            # Lấy khối code dài nhất (có thể là code chính)
+            longest_match = max(matches, key=len)
+            return longest_match.strip()
         
         # Làm sạch các dấu hiệu markdown còn sót
         clean_text = full_text.strip()
@@ -228,6 +228,69 @@ def execute_code(code):
     except Exception as e:
         return False, None, f"Error executing code: {str(e)}"
 
+def execute_code_with_timeout(code, timeout_seconds=30):
+    try:
+        # Sử dụng BytesIO cho file trong bộ nhớ
+        from io import BytesIO
+        buffer = BytesIO()
+        
+        # Chuẩn bị namespace
+        namespace = {
+            'os': os,
+            'io': __import__('io'),
+            'openpyxl': __import__('openpyxl'),
+            'BytesIO': BytesIO,
+            'buffer': buffer
+        }
+        
+        # Định nghĩa hàm thực thi code
+        def run_code():
+            # Đảm bảo code sử dụng buffer
+            modified_code = code
+            if 'buffer = io.BytesIO()' not in modified_code and 'buffer = BytesIO()' not in modified_code:
+                modified_code = modified_code.replace('def create_excel_report(buffer):', 
+                                                    'def create_excel_report(buffer=buffer):')
+            
+            # Thêm lệnh return buffer nếu chưa có
+            if 'return buffer' not in modified_code:
+                lines = modified_code.split('\n')
+                for i in range(len(lines)-1, -1, -1):
+                    if 'buffer.seek(0)' in lines[i]:
+                        lines.insert(i+1, '    return buffer')
+                        break
+                modified_code = '\n'.join(lines)
+            
+            # Thực thi code
+            exec(modified_code, namespace)
+            
+            # Debug info
+            st.write("Debug info:")
+            st.json({
+                "Platform": os.name,
+                "Python version": sys.version,
+                "Buffer size": buffer.getbuffer().nbytes if buffer else 0,
+                "Namespace keys": list(namespace.keys())
+            })
+            
+            # Lấy buffer từ namespace
+            if 'buffer' in namespace and isinstance(namespace['buffer'], BytesIO):
+                buffer = namespace['buffer']
+                buffer.seek(0)
+            
+            return buffer
+        
+        # Chạy với timeout
+        result_buffer = func_timeout(timeout_seconds, run_code)
+        
+        if result_buffer.getbuffer().nbytes > 0:
+            return True, result_buffer, "Excel file generated successfully!"
+        else:
+            return False, None, "Buffer trống sau khi thực thi code"
+            
+    except FunctionTimedOut:
+        return False, None, f"Thực thi code vượt quá thời gian giới hạn ({timeout_seconds} giây)"
+    except Exception as e:
+        return False, None, f"Error executing code: {str(e)}"
 
 # Hàm lưu và tải API key
 def save_api_key(api_key):
@@ -286,9 +349,16 @@ uploaded_file = st.file_uploader("Chọn PDF/Ảnh", type=["pdf", "png", "jpg", 
 
 # Prompt
 st.subheader("Yêu cầu xử lý")
-prompt_text = st.text_area("", 
-                          value="Read file then create code to create Excel file with full data from image without editing or deleting anything, full text.",
-                          height=100)
+prompt_text = st.text_area(
+    "Prompt",  # Thêm label
+    value="Read file then create code to create Excel file with full data from image without editing or deleting anything, full text.",
+    height=100,
+    label_visibility="collapsed"  # Ẩn label nhưng vẫn tuân thủ accessibility
+)
+
+# Thêm vào UI sau phần prompt
+st.subheader("Cài đặt thực thi")
+timeout_seconds = st.slider("Thời gian timeout (giây)", min_value=5, max_value=120, value=30, step=5)
 
 # Thanh tiến trình và trạng thái
 progress_placeholder = st.empty()
@@ -296,7 +366,12 @@ status_placeholder = st.empty()
 
 # Khu vực hiển thị code
 st.subheader("Code sinh ra")
-code_area = st.text_area("", value=st.session_state.generated_code, height=300)
+code_area = st.text_area(
+    "Generated Code",  # Thêm label
+    value=st.session_state.generated_code, 
+    height=300,
+    label_visibility="collapsed"  # Ẩn label
+)
 
 if code_area != st.session_state.generated_code and code_area.strip() != "":
     st.session_state.generated_code = code_area
@@ -405,35 +480,42 @@ if run_code_button:
         for i in range(1, 5):
             progress_bar.progress(i * 20)
         
-        # Chạy code và nhận lại buffer thay vì lưu file
-        success, excel_buffer, message = execute_code(st.session_state.generated_code)
-        
-        progress_bar.progress(100)
-        
-        if success:
-            # Lưu buffer trong session state để sử dụng sau
-            st.session_state.excel_buffer = excel_buffer
+        try:
+            # Chạy code với timeout
+            success, excel_buffer, message = execute_code_with_timeout(
+                st.session_state.generated_code, 
+                timeout_seconds=timeout_seconds
+            )
             
-            # Tạo tên file theo tên file đầu vào (nếu có)
-            if uploaded_file:
-                base_name = os.path.splitext(uploaded_file.name)[0]  # Lấy chỉ phần tên file
-                excel_file_name = f"{base_name}.xlsx"
-            else:
-                excel_file_name = "converted_data.xlsx"
+            progress_bar.progress(100)
             
-            buffer_size = excel_buffer.getbuffer().nbytes
-
-            if buffer_size > 0:
-                # Hiển thị nút tải xuống
-                st.download_button(
-                    label="Tải xuống file Excel",
-                    data=excel_buffer,
-                    file_name=excel_file_name,
-                    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-                )
-                status_placeholder.success(f"Excel file đã được tạo ({buffer_size} bytes). Nhấn nút để tải xuống.")
+            if success:
+                # Tạo tên file theo tên file đầu vào (nếu có)
+                if uploaded_file:
+                    base_name = os.path.splitext(uploaded_file.name)[0]  # Lấy chỉ phần tên file
+                    excel_file_name = f"{base_name}.xlsx"
+                else:
+                    excel_file_name = "converted_data.xlsx"
+                
+                buffer_size = excel_buffer.getbuffer().nbytes
+                if buffer_size > 0:
+                    # Hiển thị nút tải xuống
+                    st.download_button(
+                        label="Tải xuống file Excel",
+                        data=excel_buffer,
+                        file_name=excel_file_name,
+                        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+                    )
+                    
+                    status_placeholder.success(f"Excel file đã được tạo ({buffer_size} bytes). Nhấn nút để tải xuống.")
+                else:
+                    status_placeholder.error("File Excel trống (0 bytes). Có lỗi trong quá trình tạo file.")
             else:
-                status_placeholder.error("File Excel trống (0 bytes). Có lỗi trong quá trình tạo file.")
+                status_placeholder.error(f"Thực thi code thất bại: {message}")
+                
+        except Exception as e:
+            progress_bar.progress(100)
+            status_placeholder.error(f"Lỗi không mong đợi: {str(e)}")
 
 if reset_button:
     # Reset session state
