@@ -1,54 +1,53 @@
 # Convert PDF file or image to excel using Gemini API
-📌 **Tổng quan**
+📌 **Overview**
 
-Ứng dụng này cho phép chuyển đổi tài liệu PDF/hình ảnh sang file Excel tự động bằng cách sử dụng Gemini API của Google. Người dùng có thể tương tác qua giao diện đồ họa đơn giản. **Phần mềm này được lập trình bằng AI**.
+This application allows automatic conversion of PDF documents/images to Excel files using Google's Gemini API. Users can interact through a simple graphical interface. **This software is programmed by AI**.
 
-Demo trực tiếp: https://excelconverter.streamlit.app/
+Live demo: https://excelconverter.streamlit.app/
 
-🚀 **Tính năng chính**
+🚀 **Key Features**
 
-- ✅ Chọn file PDF hoặc ảnh đầu vào
-- ✅ Hỗ trợ nhiều định dạng: PDF, JPG, JPEG và PNG
-- ✅ Trích xuất bằng AI sử dụng API Gemini 2.5 Pro
-- ✅ Tùy chỉnh đầu ra với định dạng phù hợp
-- ✅ Minh bạch mã nguồn - xem và chỉnh sửa mã Python
-- ✅ Xử lý trên trình duyệt không cần cài đặt phần mềm
-- ✅ Tải xuống kết quả dưới dạng file Excel
+- ✅ Select PDF or image input files
+- ✅ Support multiple formats: PDF, JPG, JPEG and PNG
+- ✅ AI extraction using Gemini 2.5 Pro API
+- ✅ Customize output with appropriate formatting
+- ✅ Source code transparency - view and edit Python code
+- ✅ Browser-based processing without software installation
+- ✅ Download results as Excel file
 
-⚙️ **Cài đặt**
+⚙️ **Installation**
 
-  Yêu cầu hệ thống
+  System Requirements
   
     Python 3.7+
     
-    Hệ điều hành: Windows/macOS/Linux
+    Operating System: Windows/macOS/Linux
   
-  Cài đặt thư viện
+  Install Libraries
   
     pip install -r requirements.txt
   
-  🔑 **Cấu hình API**
+  🔑 **API Configuration**
   
-  1. Lấy API Key từ Google AI Studio
+  1. Get API Key from Google AI Studio
   
-  2. Nhập API Key vào ô tương ứng trong ứng dụng
+  2. Enter API Key in the corresponding field in the application
   
-  3. API Key sẽ được lưu trong phiên trình duyệt của bạn
+  3. API Key will be saved in your browser session
 
-🖥️ **Cách sử dụng**
+🖥️ **How to Use**
 
-1. Truy cập ứng dụng:
+1. Access the application:
 
        https://excelconverter.streamlit.app/
   
-2. Thao tác với giao diện:
+2. Interface operations:
 
-  - Nhập API Key của bạn vào phần "API Settings"
-  - Chọn file PDF/ảnh cần xử lý
-  - Tùy chỉnh yêu cầu xử lý (nếu cần)
-  - Nhấn "Generate Code" để sinh mã
-  - Xem và kiểm tra mã được tạo
-  - Nhấn "Execute Code" để xử lý file
+  - Enter your API Key in the "API Settings" section
+  - Select the PDF/image file to process
+  - Customize processing requests (if needed)
+  - Click "Generate Code" to create code
+  - View and check the generated code
+  - Click "Execute Code" to process the file
 
-3. Tải xuống file Excel kết quả
-
+3. Download the resulting Excel file
