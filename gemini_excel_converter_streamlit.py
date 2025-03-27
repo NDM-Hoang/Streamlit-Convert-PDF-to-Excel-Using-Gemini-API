@@ -1,11 +1,12 @@
 import streamlit as st
 import base64
-import json
 import requests
 import re
 import tempfile
 import os
 from io import BytesIO
+import pandas as pd
+from st_aggrid import AgGrid, GridOptionsBuilder
 
 # Page configuration
 st.set_page_config(
@@ -76,12 +77,13 @@ def build_prompt(user_prompt):
     5. Ensure buffer has data by verifying it after save
     6. Return buffer at the end of the function
     7. Don't explain anything, just give code
+    8. Don't use pytesseract
 
     User instructions: {user_prompt}
     """
 
 # Call Gemini API
-def call_gemini_api(api_key, prompt, file_data, mime_type):
+def call_gemini_api(api_key, prompt, file_data, mime_type, model_name):
     headers = {
         "Content-Type": "application/json"
     }
@@ -106,7 +108,7 @@ def call_gemini_api(api_key, prompt, file_data, mime_type):
     }
     
     response = requests.post(
-        f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-pro-exp-03-25:generateContent?key={api_key}",
+        f"https://generativelanguage.googleapis.com/v1beta/models/{model_name}:generateContent?key={api_key}",
         headers=headers,
         json=payload
     )
@@ -239,9 +241,29 @@ with st.expander("API Settings", expanded=True):
                            type="password",
                            help="Enter your Gemini API key")
     
+    # Add selectbox for Gemini model
+    gemini_model = st.selectbox(
+        "Gemini Model",
+        options=[
+            "gemini-2.5-pro-exp-03-25",
+            "gemini-2.0-flash-thinking-exp-01-21",
+            "gemini-2.0-flash"
+        ],
+        index=0,  # Default to first model
+        help="Select Gemini model to process request"
+    )
+
     # Save API key when changed
     if api_key != st.session_state.api_key:
         st.session_state.api_key = api_key
+
+# Initialize session state
+if 'gemini_model' not in st.session_state:
+    st.session_state.gemini_model = "gemini-2.5-pro-exp-03-25"
+
+# Update session state when model changes
+if gemini_model != st.session_state.gemini_model:
+    st.session_state.gemini_model = gemini_model
 
 # File selection
 st.subheader("Select Input File")
@@ -314,7 +336,7 @@ if run_prompt_button:
             progress_bar.progress(40)
             
             # Call API
-            response = call_gemini_api(api_key, prompt, file_data, mime_type)
+            response = call_gemini_api(api_key, prompt, file_data, mime_type, st.session_state.gemini_model)
             if not response:
                 progress_placeholder.empty()
                 status_placeholder.error("Error calling Gemini API")
@@ -387,6 +409,31 @@ if run_code_button:
                     file_name=excel_file_name,
                     mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
                 )
+
+                # Thêm phần preview Excel
+                st.subheader("Excel Preview")
+                excel_buffer.seek(0)
+                try:
+                    dfs = pd.read_excel(excel_buffer, sheet_name=None)
+                    
+                    for sheet_name, df in dfs.items():
+                        with st.expander(f"Sheet: {sheet_name}", expanded=True if len(dfs) == 1 else False):
+                            gb = GridOptionsBuilder.from_dataframe(df)
+                            gb.configure_default_column(groupable=True, enableRowGroup=True)
+                            gb.configure_grid_options(enableRangeSelection=True, domLayout='normal')
+                            gridOptions = gb.build()
+                            AgGrid(df, 
+                                gridOptions=gridOptions,
+                                allow_unsafe_jscode=True,
+                                theme="streamlit",
+                                height=400,
+                                fit_columns_on_grid_load=True)
+                    
+                    excel_buffer.seek(0)
+                except Exception as e:
+                    st.error(f"Preview failed: {str(e)}")
+
+                
                 
                 status_placeholder.success(f"Excel file created ({buffer_size} bytes). Click button to download.")
             else:
