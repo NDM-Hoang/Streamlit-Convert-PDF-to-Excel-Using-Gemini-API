@@ -339,7 +339,7 @@ if run_prompt_button:
             response = call_gemini_api(api_key, prompt, file_data, mime_type, st.session_state.gemini_model)
             if not response:
                 progress_placeholder.empty()
-                status_placeholder.error("Error calling Gemini API")
+                status_placeholder.error("Error calling Gemini API, change model and try again")
                 os.unlink(temp_file_path)
                 st.stop()
             
