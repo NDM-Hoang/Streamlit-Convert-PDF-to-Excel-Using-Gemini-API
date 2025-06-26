@@ -1,7 +1,7 @@
 # Convert PDF file or image to excel using Gemini API
 📌 **Overview**
 
-This application allows automatic conversion of PDF documents/images to Excel files using Google's Gemini API. Users can interact through a simple graphical interface. **This software is programmed by AI**.
+This application allows automatic conversion of PDF documents/images to Excel files using Google's Gemini API. Users can interact through a simple graphical interface.
 
 Live demo: https://excelconverter.streamlit.app/
 
